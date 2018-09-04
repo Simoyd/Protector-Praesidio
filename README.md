@@ -1,4 +1,4 @@
-# ProtectorVenari
+# ProtectorPraesidio
 This is a bot used by the boundless discord to give imore fine-grained privilages to some users
 
 ## Commands
