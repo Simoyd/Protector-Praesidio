@@ -2,6 +2,7 @@
 using Discord.WebSocket;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -74,9 +75,23 @@ namespace ProtectorPraesidio
             _client.MessageReceived += MessageReceived;
 
             // Login to the discord server
-            string token = "THIS IS PRIVATE"; // Remember to keep this private!
+            string token = File.ReadAllText("DiscordToken.txt");
             await _client.LoginAsync(TokenType.Bot, token);
             await _client.StartAsync();
+
+            // Reconnect if disconnected
+            await Task.Run(async () =>
+            {
+                while (true)
+                {
+                    await Task.Delay(3333);
+
+                    if (_client.LoginState == LoginState.LoggedOut)
+                    {
+                        await _client.LoginAsync(TokenType.Bot, token);
+                    }
+                }
+            });
 
             // Block this task until the program is closed.
             await Task.Delay(-1);
@@ -167,7 +182,7 @@ namespace ProtectorPraesidio
                 }
 
                 // Get the target user ID
-                Regex citizenCommandPattern = new Regex("^!citizen (<@!?([0-9]*)>|([0-9]*))$");
+                Regex citizenCommandPattern = new Regex("^!citizen\\s+(<@!?([0-9]+)>|([0-9]+))\\s*$");
                 Match match = citizenCommandPattern.Match(arg.Content);
 
                 if (!match.Success)
