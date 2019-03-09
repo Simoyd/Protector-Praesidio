@@ -1,9 +1,11 @@
 ﻿using Discord;
 using Discord.WebSocket;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -33,6 +35,11 @@ namespace ProtectorPraesidio
         /// Command that applies the citizen role
         /// </summary>
         private const string CitizenCommand = "!citizen";
+
+        /// <summary>
+        /// Command that checks the price of an item on boundless trade
+        /// </summary>
+        private const string PricecheckCommand = "!pricecheck";
 
         /// <summary>
         /// Role to apply for the citizen command
@@ -238,6 +245,103 @@ namespace ProtectorPraesidio
                 // Add the role and inform the user
                 await targetUser.AddRoleAsync(role);
                 await arg.Channel.SendMessageAsync($"`{targetUser.Nickname ?? targetUser.Username}` has been given the `{CitizenRole}` role! Congratulations!");
+            }
+            else if (arg.Content.StartsWith(PricecheckCommand))
+            {
+                // Get the quantity and item
+                var pricecheckCommandPattern = new Regex("^!pricecheck\\s+(([0-9]+)\\s+|)(.*[^\\s])\\s*$");
+                var match = pricecheckCommandPattern.Match(arg.Content);
+
+                if (!match.Success)
+                {
+                    await arg.Channel.SendMessageAsync($"Failed to parse command. Syntax: `!pricecheck [<quantity>] <item>`");
+                }
+                else
+                {
+                    string item = match.Groups[3].Value;
+                    int volume;
+
+                    if (string.IsNullOrEmpty(match.Groups[2].Value))
+                    {
+                        volume = 1;
+                    }
+                    else
+                    {
+                        try
+                        {
+                            volume = Math.Max(1, Convert.ToInt32(match.Groups[2].Value));
+                        }
+                        catch
+                        {
+                            volume = 1;
+                        }
+                    }
+
+                    var bt = new BoundlessTradeService();
+
+                    JObject result = null;
+
+                    try
+                    {
+                        result = await bt.PriceCheckAsync(item, volume);
+                    }
+                    catch
+                    {
+                    }
+
+                    StringBuilder output = new StringBuilder();
+
+                    try
+                    {
+                        output.Append($"**Boundless Trade Network - Info for {result["displayName"]}**\r\n");
+                        output.Append($"All Orders and Locations: <{result["url"]}>");
+                        output.Append($"```\r\n");
+
+                        if (volume != 1)
+                        {
+                            output.AppendLine($"Best Prices for Quantity {volume}:");
+                            output.AppendLine($"Selling for {result["bestPriceVolume"]["sell"]} coin.");
+                            output.AppendLine($"Buying for {result["bestPriceVolume"]["buy"]} coin.");
+                            output.AppendLine();
+                        }
+
+                        output.AppendLine($"Best Prices for Quantity 1:");
+                        output.AppendLine($"Selling for {result["bestPrice"]["sell"]} coin.");
+                        output.AppendLine($"Buying for {result["bestPrice"]["buy"]} coin.");
+                        output.AppendLine();
+                        output.AppendLine($"Sell Order Median: {result["median"]["sell"]} Coins");
+                        output.AppendLine($"Sell Order Count: {result["totals"]["orders"]["sell"]} Shop Stands");
+                        output.AppendLine($"Sell Item Count: {result["totals"]["volume"]["sell"]} Items");
+                        output.AppendLine();
+                        output.AppendLine($"Buy Order Median: {result["median"]["buy"]} Coins");
+                        output.AppendLine($"Buy Order Count: {result["totals"]["orders"]["buy"]} Shop Stands");
+                        output.Append($"Buy Item Count: {result["totals"]["volume"]["buy"]} Items");
+                    }
+                    catch
+                    {
+                        output = new StringBuilder();
+
+                        if (result == null)
+                        {
+                            output.Append($"Failed to get response from server.");
+                        }
+                        else
+                        {
+                            if (result.ContainsKey("message"))
+                            {
+                                output.Append($"```\r\nMessage from server:\r\n{result["message"].Value<string>()}");
+                            }
+                            else
+                            {
+                                output.Append($"```\r\nJSON from server:\r\n{result.ToString(Newtonsoft.Json.Formatting.Indented)}");
+                            }
+                        }
+                    }
+
+                    output.Append("```*Disclaimer: boundlesstrade.net includes crowd sourced data from players, and as such does not include prices for ALL shopstands in the game. Prices may not be 100% indicative of reality.*");
+
+                    await arg.Channel.SendMessageAsync(output.ToString());
+                }
             }
         }
 
